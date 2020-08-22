@@ -28,33 +28,10 @@ __TYPECHO_ROOT_DIR__ . __TYPECHO_PLUGIN_DIR__);
 /** 载入API支持 */
 require_once 'Typecho/Common.php';
 
-/** 载入Response支持 */
-require_once 'Typecho/Response.php';
-
-/** 载入配置支持 */
-require_once 'Typecho/Config.php';
-
-/** 载入异常支持 */
-require_once 'Typecho/Exception.php';
-
-/** 载入插件支持 */
-require_once 'Typecho/Plugin.php';
-
-/** 载入国际化支持 */
-require_once 'Typecho/I18n.php';
-
-/** 载入数据库支持 */
-require_once 'Typecho/Db.php';
-
-/** 载入路由器支持 */
-require_once 'Typecho/Router.php';
-
 /** 程序初始化 */
 Typecho_Common::init();
 
 else:
-    //解决安装报错：Warning: Cannot modify header information - headers already sent by (output started atxxxx
-    ob_start();
 
     require_once dirname(__FILE__) . '/config.inc.php';
 
@@ -71,6 +48,8 @@ else:
     }
 
 endif;
+
+ob_start();
 
 // 挡掉可能的跨站请求
 if (!empty($_GET) || !empty($_POST)) {
@@ -182,15 +161,7 @@ list($prefixVersion, $suffixVersion) = explode('/', $currentVersion);
 $lang = _r('lang', Typecho_Cookie::get('__typecho_lang'));
 $langs = Widget_Options_General::getLangs();
 
-if (empty($lang) && count($langs) > 1) {
-    foreach ($langs as $lang) {
-        if ('zh_CN' != $lang) {
-            break;
-        }
-    }
-}
-
-if (empty($lang)) {
+if (empty($lang) || (!empty($langs) && !isset($langs[$lang]))) {
     $lang = 'zh_CN';
 }
 
@@ -200,7 +171,6 @@ if ('zh_CN' != $lang) {
 }
 
 Typecho_Cookie::set('__typecho_lang', $lang);
-
 ?><!DOCTYPE HTML>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head lang="zh-CN">
@@ -229,14 +199,14 @@ Typecho_Cookie::set('__typecho_lang', $lang);
                 <h1 class="typecho-install-title"><?php _e('安装失败!'); ?></h1>
                 <div class="typecho-install-body">
                     <form method="post" action="?config" name="config">
-                    <p class="message error"><?php _e('您没有上传 config.inc.php 文件，请您重新安装！'); ?> <button class="btn primary" type="submit"><?php _e('重新安装 &raquo;'); ?></button></p>
+                    <p class="message error"><?php _e('您没有上传 config.inc.php 文件, 请您重新安装!'); ?> <button class="btn primary" type="submit"><?php _e('重新安装 &raquo;'); ?></button></p>
                     </form>
                 </div>
                 <?php elseif (!Typecho_Cookie::get('__typecho_config')): ?>
                     <h1 class="typecho-install-title"><?php _e('没有安装!'); ?></h1>
                     <div class="typecho-install-body">
                         <form method="post" action="?config" name="config">
-                            <p class="message error"><?php _e('您没有执行安装步骤，请您重新安装！'); ?> <button class="btn primary" type="submit"><?php _e('重新安装 &raquo;'); ?></button></p>
+                            <p class="message error"><?php _e('您没有执行安装步骤, 请您重新安装!'); ?> <button class="btn primary" type="submit"><?php _e('重新安装 &raquo;'); ?></button></p>
                         </form>
                     </div>
                 <?php else : ?>
@@ -285,7 +255,7 @@ Typecho_Cookie::set('__typecho_lang', $lang);
                 <h1 class="typecho-install-title"><?php _e('安装失败!'); ?></h1>
                 <div class="typecho-install-body">
                     <form method="post" action="?config" name="config">
-                    <p class="message error"><?php _e('您没有上传 config.inc.php 文件，请您重新安装！'); ?> <button class="btn primary" type="submit"><?php _e('重新安装 &raquo;'); ?></button></p>
+                    <p class="message error"><?php _e('您没有上传 config.inc.php 文件, 请您重新安装!'); ?> <button class="btn primary" type="submit"><?php _e('重新安装 &raquo;'); ?></button></p>
                     </form>
                 </div>
                 <?php else : ?>
@@ -303,6 +273,10 @@ Typecho_Cookie::set('__typecho_lang', $lang);
 
                                         if (isset($config['charset'])) {
                                             $scripts = str_replace('%charset%', $config['charset'], $scripts);
+                                        }
+
+                                        if (isset($config['engine'])) {
+                                            $scripts = str_replace('%engine%', $config['engine'], $scripts);
                                         }
 
                                         $scripts = explode(';', $scripts);
@@ -497,12 +471,12 @@ Typecho_Cookie::set('__typecho_lang', $lang);
                                     }
                                 }
 
-                                $_dbConfig = _rFrom('dbHost', 'dbUser', 'dbPassword', 'dbCharset', 'dbPort', 'dbDatabase', 'dbFile', 'dbDsn');
+                                $_dbConfig = _rFrom('dbHost', 'dbUser', 'dbPassword', 'dbCharset', 'dbPort', 'dbDatabase', 'dbFile', 'dbDsn', 'dbEngine');
 
                                 $_dbConfig = array_filter($_dbConfig);
                                 $dbConfig = array();
                                 foreach ($_dbConfig as $key => $val) {
-                                    $dbConfig[strtolower (substr($key, 2))] = $val;
+                                    $dbConfig[strtolower(substr($key, 2))] = $val;
                                 }
 
                                 // 在特殊服务器上的特殊安装过程处理
@@ -529,7 +503,7 @@ Typecho_Cookie::set('__typecho_lang', $lang);
                                     } catch (Typecho_Db_Adapter_Exception $e) {
                                         $success = false;
                                         echo '<p class="message error">'
-                                        . _t('对不起，无法连接数据库，请先检查数据库配置再继续进行安装') . '</p>';
+                                        . _t('对不起, 无法连接数据库, 请先检查数据库配置再继续进行安装') . '</p>';
                                     } catch (Typecho_Db_Exception $e) {
                                         $success = false;
                                         echo '<p class="message error">'
@@ -563,7 +537,7 @@ Typecho_Cookie::set('__typecho_lang', $lang);
                                     }
 
                                     /** 初始化配置文件 */
-                                    $lines = array_slice(file(__FILE__), 1, 52);
+                                    $lines = array_slice(file(__FILE__), 1, 31);
                                     $lines[] = "
 /** 定义数据库参数 */
 \$db = new Typecho_Db('{$adapter}', '" . _r('dbPrefix') . "');
@@ -589,7 +563,7 @@ Typecho_Db::set(\$db);
                                 }
 
                                 // 安装不成功删除配置文件
-                                if($success != true && file_exists(__TYPECHO_ROOT_DIR__ . '/config.inc.php')) {
+                                if(!$success && file_exists(__TYPECHO_ROOT_DIR__ . '/config.inc.php')) {
                                     @unlink(__TYPECHO_ROOT_DIR__ . '/config.inc.php');
                                 }
                             }
@@ -657,7 +631,7 @@ Typecho_Db::set(\$db);
                 <p><strong><?php _e('本安装程序将自动检测服务器环境是否符合最低配置需求. 如果不符合, 将在上方出现提示信息, 请按照提示信息检查您的主机配置. 如果服务器环境符合要求, 将在下方出现 "开始下一步" 的按钮, 点击此按钮即可一步完成安装.'); ?></strong></p>
                 <h2><?php _e('许可及协议'); ?></h2>
                 <p><?php _e('Typecho 基于 <a href="http://www.gnu.org/copyleft/gpl.html">GPL</a> 协议发布, 我们允许用户在 GPL 协议许可的范围内使用, 拷贝, 修改和分发此程序.'); ?>
-                <?php _e('在GPL许可的范围内，您可以自由地将其用于商业以及非商业用途.'); ?></p>
+                <?php _e('在GPL许可的范围内, 您可以自由地将其用于商业以及非商业用途.'); ?></p>
                 <p><?php _e('Typecho 软件由其社区提供支持, 核心开发团队负责维护程序日常开发工作以及新特性的制定.'); ?>
                 <?php _e('如果您遇到使用上的问题, 程序中的 BUG, 以及期许的新功能, 欢迎您在社区中交流或者直接向我们贡献代码.'); ?>
                 <?php _e('对于贡献突出者, 他的名字将出现在贡献者名单中.'); ?></p>

@@ -63,7 +63,20 @@ class Typecho_Db_Adapter_Mysqli implements Typecho_Db_Adapter
      */
     public function getVersion($handle)
     {
-        return 'ext:mysqli ' . $this->_dbLink->server_version;
+        return 'mysqli:mysql ' . $this->_dbLink->server_version;
+    }
+
+    /**
+     * 清空数据表
+     *
+     * @param string $table
+     * @param mixed $handle 连接对象
+     * @return mixed|void
+     * @throws Typecho_Db_Exception
+     */
+    public function truncate($table, $handle)
+    {
+        $this->query('TRUNCATE TABLE ' . $this->quoteColumn($table), $handle);
     }
 
     /**
@@ -73,12 +86,13 @@ class Typecho_Db_Adapter_Mysqli implements Typecho_Db_Adapter
      * @param mixed $handle 连接对象
      * @param integer $op 数据库读写状态
      * @param string $action 数据库动作
+     * @param string $table 数据表
      * @throws Typecho_Db_Exception
      * @return resource
      */
-    public function query($query, $handle, $op = Typecho_Db::READ, $action = NULL)
+    public function query($query, $handle, $op = Typecho_Db::READ, $action = NULL, $table = NULL)
     {
-        if ($resource = @$this->_dbLink->query($query instanceof Typecho_Db_Query ? $query->__toString() : $query)) {
+        if ($resource = @$this->_dbLink->query($query)) {
             return $resource;
         }
 

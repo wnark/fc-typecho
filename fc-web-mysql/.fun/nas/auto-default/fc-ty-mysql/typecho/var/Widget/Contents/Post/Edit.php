@@ -99,7 +99,9 @@ class Widget_Contents_Post_Edit extends Widget_Abstract_Contents implements Widg
                 'fieldValues'   =>  $this->request->getArray('fieldValues')
             );
             foreach ($data['fieldNames'] as $key => $val) {
-                if (empty($val)) {
+                $val = trim($val);
+
+                if (0 == strlen($val)) {
                     continue;
                 }
 
@@ -128,8 +130,11 @@ class Widget_Contents_Post_Edit extends Widget_Abstract_Contents implements Widg
             $created = $this->request->created;
         } else if (!empty($this->request->date)) {
             $dstOffset = !empty($this->request->dst) ? $this->request->dst : 0;
-            $timezoneOffset = isset($this->request->timezone) ? intval($this->request->timezone) : $this->options->timezone;
-            $created = strtotime($this->request->date) - $timezoneOffset + $this->options->serverTimezone - $dstOffset;
+            $timezoneOffset = $this->options->timezone;
+            $timezone = ($timezoneOffset >= 0 ? '+' : '-') . str_pad($timezoneOffset / 3600, 2, '0', STR_PAD_LEFT) . ':00';
+            list ($date, $time) = explode(' ', $this->request->date);
+
+            $created = strtotime("{$date}T{$time}{$timezone}") - $dstOffset;
         } else if (!empty($this->request->year) && !empty($this->request->month) && !empty($this->request->day)) {
             $second = intval($this->request->get('sec', date('s')));
             $min = intval($this->request->get('min', date('i')));
@@ -766,7 +771,8 @@ class Widget_Contents_Post_Edit extends Widget_Abstract_Contents implements Widg
                 $this->response->throwJson(array(
                     'success'   =>  1,
                     'time'      =>  $created->format('H:i:s A'),
-                    'cid'       =>  $this->cid
+                    'cid'       =>  $this->cid,
+                    'draftId'   =>  $this->draft['cid']
                 ));
             } else {
                 /** 设置提示信息 */
@@ -888,17 +894,6 @@ class Widget_Contents_Post_Edit extends Widget_Abstract_Contents implements Widg
     }
 
     /**
-     * 输出Markdown预览 
-     * 
-     * @access public
-     * @return void
-     */
-    public function preview()
-    {
-        $this->response->throwJson($this->markdown($this->request->text));
-    }
-
-    /**
      * 绑定动作
      *
      * @access public
@@ -910,7 +905,6 @@ class Widget_Contents_Post_Edit extends Widget_Abstract_Contents implements Widg
         $this->on($this->request->is('do=publish') || $this->request->is('do=save'))->writePost();
         $this->on($this->request->is('do=delete'))->deletePost();
         $this->on($this->request->is('do=deleteDraft'))->deletePostDraft();
-        $this->on($this->request->is('do=preview'))->preview();
 
         $this->response->redirect($this->options->adminUrl);
     }

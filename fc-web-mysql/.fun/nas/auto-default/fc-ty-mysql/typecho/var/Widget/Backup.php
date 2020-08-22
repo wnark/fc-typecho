@@ -14,7 +14,8 @@ if (!defined('__TYPECHO_ROOT_DIR__')) exit;
  */
 class Widget_Backup extends Widget_Abstract_Options implements Widget_Interface_Do
 {
-    const HEADER = '%TYPECHO_BACKUP_FILE%';
+    const HEADER = '%TYPECHO_BACKUP_XXXX%';
+    const HEADER_VERSION = '0001';
 
     /**
      * @var array
@@ -31,12 +32,68 @@ class Widget_Backup extends Widget_Abstract_Options implements Widget_Interface_
     /**
      * @var array
      */
+    private $_fields = array(
+        'contents'  =>  array(
+            'cid', 'title', 'slug', 'created', 'modified', 'text', 'order', 'authorId',
+            'template', 'type', 'status', 'password', 'commentsNum', 'allowComment', 'allowPing', 'allowFeed', 'parent'
+        ),
+        'comments'  =>  array(
+            'coid', 'cid', 'created', 'author', 'authorId', 'ownerId',
+            'mail', 'url', 'ip', 'agent', 'text', 'type', 'status', 'parent'
+        ),
+        'metas'     =>  array(
+            'mid', 'name', 'slug', 'type', 'description', 'count', 'order', 'parent'
+        ),
+        'relationships' =>  array('cid', 'mid'),
+        'users'     =>  array(
+            'uid', 'name', 'password', 'mail', 'url', 'screenName', 'created', 'activated', 'logged', 'group', 'authCode'
+        ),
+        'fields'    =>  array(
+            'cid', 'name', 'type', 'str_value', 'int_value', 'float_value'
+        )
+    );
+
+    /**
+     * @var array
+     */
+    private $_lastIds = array();
+
+    /**
+     * @var array
+     */
     private $_cleared = array();
 
     /**
      * @var bool
      */
     private $_login = false;
+
+    /**
+     * 过滤字段
+     *
+     * @param $table
+     * @param $data
+     * @return array
+     */
+    private function applyFields($table, $data)
+    {
+        $result = array();
+
+        foreach ($data as $key => $val) {
+            $index = array_search($key, $this->_fields[$table]);
+
+            if ($index !== false) {
+                $result[$key] = $val;
+
+                if ($index === 0 && !in_array($table, array('relationships', 'fields'))) {
+                    $this->_lastIds[$table] = isset($this->_lastIds[$table])
+                        ? max($this->_lastIds[$table], $val) : $val;
+                }
+            }
+        }
+
+        return $result;
+    }
 
     /**
      * @param $type
@@ -55,6 +112,24 @@ class Widget_Backup extends Widget_Abstract_Options implements Widget_Interface_
 
         $header = Json::encode($schema);
         return Typecho_Common::buildBackupBuffer($type, $header, $body);
+    }
+
+    /**
+     * @param $str
+     * @param $version
+     * @return bool
+     */
+    private function parseHeader($str, &$version) {
+        if (!$str || strlen($str) != strlen(self::HEADER)) {
+            return false;
+        }
+
+        if (!preg_match("/%TYPECHO_BACKUP_[A-Z0-9]{4}%/", $str)) {
+            return false;
+        }
+
+        $version = substr($str, 16, -1);
+        return true;
     }
 
     /**
@@ -82,7 +157,7 @@ class Widget_Backup extends Widget_Abstract_Options implements Widget_Interface_
 
         $fileHeader = @fread($fp, $headerSize);
 
-        if (!$fileHeader || $fileHeader != self::HEADER) {
+        if (!$this->parseHeader($fileHeader, $version)) {
             @fclose($fp);
             $this->widget('Widget_Notice')->set(_t('备份文件格式错误'), 'error');
             $this->response->goBack();
@@ -91,7 +166,7 @@ class Widget_Backup extends Widget_Abstract_Options implements Widget_Interface_
         fseek($fp, $fileSize - $headerSize);
         $fileFooter = @fread($fp, $headerSize);
 
-        if (!$fileFooter || $fileFooter != self::HEADER) {
+        if (!$this->parseHeader($fileFooter, $version)) {
             @fclose($fp);
             $this->widget('Widget_Notice')->set(_t('备份文件格式错误'), 'error');
             $this->response->goBack();
@@ -101,7 +176,7 @@ class Widget_Backup extends Widget_Abstract_Options implements Widget_Interface_
         $offset = $headerSize;
 
         while (!feof($fp) && $offset + $headerSize < $fileSize) {
-            $data = Typecho_Common::extractBackupBuffer($fp, $offset);
+            $data = Typecho_Common::extractBackupBuffer($fp, $offset, $version);
 
             if (!$data) {
                 @fclose($fp);
@@ -111,6 +186,14 @@ class Widget_Backup extends Widget_Abstract_Options implements Widget_Interface_
 
             list ($type, $header, $body) = $data;
             $this->processData($type, $header, $body);
+        }
+
+        // 针对PGSQL重置计数
+        if (false !== strpos($this->db->getVersion(), 'pgsql')) {
+            foreach ($this->_lastIds as $table => $id) {
+                $seq = $this->db->getPrefix() . $table . '_seq';
+                $this->db->query('ALTER SEQUENCE ' . $seq . ' RESTART WITH ' . ($id + 1));
+            }
         }
 
         @fclose($fp);
@@ -148,6 +231,7 @@ class Widget_Backup extends Widget_Abstract_Options implements Widget_Interface_
      *
      * @param $table
      * @param $data
+     * @throws Typecho_Exception
      */
     private function importData($table, $data)
     {
@@ -156,7 +240,7 @@ class Widget_Backup extends Widget_Abstract_Options implements Widget_Interface_
         try {
             if (empty($this->_cleared[$table])) {
                 // 清除数据
-                $db->query($db->delete('table.' . $table));
+                $db->truncate('table.' . $table);
                 $this->_cleared[$table] = true;
             }
 
@@ -165,7 +249,7 @@ class Widget_Backup extends Widget_Abstract_Options implements Widget_Interface_
                 $this->reLogin($data);
             }
 
-            $db->query($db->insert('table.' . $table)->rows($data));
+            $db->query($db->insert('table.' . $table)->rows($this->applyFields($table, $data)));
         } catch (Exception $e) {
             $this->widget('Widget_Notice')->set(_t('恢复过程中遇到如下错误: %s', $e->getMessage()), 'error');
             $this->response->goBack();
@@ -203,7 +287,8 @@ class Widget_Backup extends Widget_Abstract_Options implements Widget_Interface_
         $this->response->setHeader('Content-Disposition', 'attachment; filename="'
             . date('Ymd') . '_' . $host . '_' . uniqid() . '.dat"');
 
-        $buffer = self::HEADER;
+        $header = str_replace('XXXX', self::HEADER_VERSION, self::HEADER);
+        $buffer = $header;
         $db = $this->db;
 
         foreach ($this->_types as $type => $val) {
@@ -213,9 +298,9 @@ class Widget_Backup extends Widget_Abstract_Options implements Widget_Interface_
                 $page ++;
 
                 foreach ($rows as $row) {
-                    $buffer .= $this->buildBuffer($val, $row);
+                    $buffer .= $this->buildBuffer($val, $this->applyFields($type, $row));
 
-                    if (sizeof($buffer) >= 1024 * 1024) {
+                    if (strlen($buffer) >= 1024 * 1024) {
                         echo $buffer;
                         ob_flush();
                         $buffer = '';
@@ -230,7 +315,7 @@ class Widget_Backup extends Widget_Abstract_Options implements Widget_Interface_
         }
 
         Typecho_Plugin::factory(__CLASS__)->export();
-        echo self::HEADER;
+        echo $header;
         ob_end_flush();
     }
 

@@ -370,7 +370,7 @@ class Typecho_Plugin
 
         $items = array_map('trim', explode('-', $versionRange));
         if (count($items) < 2) {
-            $items[1] = $items[0];
+            $items[1] = '9999.9999.9999';
         }
 
         list ($minVersion, $maxVersion) = $items;
@@ -407,8 +407,8 @@ class Typecho_Plugin
      * @param string $pluginName 插件名称
      * @return mixed
      */
-    public function exists($pluginName) {
-        return array_search($pluginName, self::$_plugins['activated']);
+    public static function exists($pluginName) {
+        return array_key_exists($pluginName, self::$_plugins['activated']);
     }
 
     /**

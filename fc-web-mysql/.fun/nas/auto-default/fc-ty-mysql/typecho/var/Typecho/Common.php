@@ -12,6 +12,45 @@
 define('__TYPECHO_MB_SUPPORTED__', function_exists('mb_get_info') && function_exists('mb_regex_encoding'));
 
 /**
+ * I18n function
+ *
+ * @param string $string 需要翻译的文字
+ * @return string
+ */
+function _t($string) {
+    if (func_num_args() <= 1) {
+        return Typecho_I18n::translate($string);
+    } else {
+        $args = func_get_args();
+        array_shift($args);
+        return vsprintf(Typecho_I18n::translate($string), $args);
+    }
+}
+
+/**
+ * I18n function, translate and echo
+ *
+ * @param string $string 需要翻译并输出的文字
+ * @return void
+ */
+function _e() {
+    $args = func_get_args();
+    echo call_user_func_array('_t', $args);
+}
+
+/**
+ * 针对复数形式的翻译函数
+ *
+ * @param string $single 单数形式的翻译
+ * @param string $plural 复数形式的翻译
+ * @param integer $number 数字
+ * @return string
+ */
+function _n($single, $plural, $number) {
+    return str_replace('%d', $number, Typecho_I18n::ngettext($single, $plural, $number));
+}
+
+/**
  * Typecho公用方法
  *
  * @category typecho
@@ -22,7 +61,7 @@ define('__TYPECHO_MB_SUPPORTED__', function_exists('mb_get_info') && function_ex
 class Typecho_Common
 {
     /** 程序版本 */
-    const VERSION = '1.1/17.10.30';
+    const VERSION = '1.2/18.1.29';
 
     /**
      * 允许的属性
@@ -410,7 +449,6 @@ EOF;
         return !empty($_SERVER['HTTP_APPNAME'])                     // SAE
             || !!getenv('HTTP_BAE_ENV_APPID')                       // BAE
             || !!getenv('HTTP_BAE_LOGID')                           // BAE 3.0
-            || (ini_get('acl.app_id') && class_exists('Alibaba'))   // ACE
             || (isset($_SERVER['SERVER_SOFTWARE']) && strpos($_SERVER['SERVER_SOFTWARE'],'Google App Engine') !== false) // GAE
             ;
     }
@@ -543,6 +581,12 @@ EOF;
                 if ($attrLength > 0 && "/" == trim($startTags[2][$key][$attrLength - 1])) {
                     continue;
                 }
+
+                // 白名单
+                if (preg_match("/^(area|base|br|col|embed|hr|img|input|keygen|link|meta|param|source|track|wbr)$/i", $tag)) {
+                    continue;
+                }
+
                 if (!empty($closeTags[1]) && $closeTagsIsArray) {
                     if (false !== ($index = array_search($tag, $closeTags[1]))) {
                         unset($closeTags[1][$index]);
@@ -906,6 +950,39 @@ EOF;
     }
 
     /**
+     * 创建一个会过期的Token
+     *
+     * @param $secret
+     * @return string
+     */
+    public static function timeToken($secret)
+    {
+        return sha1($secret . '&' . time());
+    }
+
+    /**
+     * 在时间范围内验证token
+     *
+     * @param $token
+     * @param $secret
+     * @param int $timeout
+     * @return bool
+     */
+    public static function timeTokenValidate($token, $secret, $timeout = 5)
+    {
+        $now = time();
+        $from = $now - $timeout;
+
+        for ($i = $now; $i >= $from; $i --) {
+            if (sha1($secret . '&' . $i) == $token) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * 将路径转化为链接
      *
      * @access public
@@ -1055,7 +1132,7 @@ EOF;
     {
         $buffer = '';
 
-        $buffer .= pack('vvv', $type, strlen($header), strlen($body));
+        $buffer .= pack('vvV', $type, strlen($header), strlen($body));
         $buffer .= $header . $body;
         $buffer .= md5($buffer);
 
@@ -1067,25 +1144,34 @@ EOF;
      *
      * @param $fp
      * @param bool $offset
+     * @param string $version
      * @return array|bool
      */
-    public static function extractBackupBuffer($fp, &$offset)
+    public static function extractBackupBuffer($fp, &$offset, $version)
     {
-        $meta = fread($fp, 6);
-        $offset += 6;
+        $realMetaLen = $version == 'FILE' ? 6 : 8;
+
+        $meta = fread($fp, $realMetaLen);
+        $offset += $realMetaLen;
         $metaLen = strlen($meta);
 
-        if (false === $meta || $metaLen != 6) {
+        if (false === $meta || $metaLen != $realMetaLen) {
             return false;
         }
 
-        list ($type, $headerLen, $bodyLen) = array_values(unpack('v3', $meta));
+        list ($type, $headerLen, $bodyLen) = array_values(unpack($version == 'FILE' ? 'v3' : 'v1type/v1headerLen/V1bodyLen', $meta));
 
         $header = @fread($fp, $headerLen);
         $offset += $headerLen;
 
         if (false === $header || strlen($header) != $headerLen) {
             return false;
+        }
+
+        if ('FILE' == $version) {
+            $bodyLen = array_reduce(json_decode($header, true), function ($carry, $len) {
+                return NULL === $len ? $carry : $carry + $len;
+            }, 0);
         }
 
         $body = @fread($fp, $bodyLen);

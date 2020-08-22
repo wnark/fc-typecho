@@ -340,7 +340,7 @@ class Widget_Options extends Typecho_Widget
                 array('gif,jpg,jpeg,png,tiff,bmp', 'mp3,wmv,wma,rmvb,rm,avi,flv',
                     'txt,doc,docx,xls,xlsx,ppt,pptx,zip,rar,pdf'), $this->attachmentTypes);
             
-            $attachmentTypesResult = array_unique(array_map('trim', explode(',', $attachmentTypes)));
+            $attachmentTypesResult = array_unique(array_map('trim', preg_split("/(,|\.)/", $attachmentTypes)));
         }
         
         return $attachmentTypesResult;
@@ -497,7 +497,7 @@ class Widget_Options extends Typecho_Widget
      * @param $plugin
      * @return string
      */
-    public function pluginDir($plugin)
+    public function pluginDir($plugin = NULL)
     {
         return __TYPECHO_ROOT_DIR__ . '/' . __TYPECHO_PLUGIN_DIR__;
     }

@@ -40,15 +40,25 @@ interface Typecho_Db_Adapter
     public function getVersion($handle);
 
     /**
+     * 清空数据表
+     *
+     * @param string $table 数据表名
+     * @param mixed $handle 连接对象
+     * @return mixed
+     */
+    public function truncate($table, $handle);
+
+    /**
      * 执行数据库查询
      *
      * @param string $query 数据库查询SQL字符串
      * @param mixed $handle 连接对象
      * @param integer $op 数据库读写状态
      * @param string $action 数据库动作
+     * @param string $table 数据表
      * @return resource
      */
-    public function query($query, $handle, $op = Typecho_Db::READ, $action = NULL);
+    public function query($query, $handle, $op = Typecho_Db::READ, $action = NULL, $table = NULL);
 
     /**
      * 将数据查询的其中一行作为数组取出,其中字段名对应数组键值
