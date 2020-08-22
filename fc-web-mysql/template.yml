@@ -4,10 +4,10 @@ Resources:
   fc-ty-mysql:
     Type: 'Aliyun::Serverless::Service'
     Properties:
-      Description: 'run typecho on FC'
+      Description: 'run wordpress on FC'
       NasConfig: Auto
       LogConfig:
-        Project: fc-ty-demo
+        Project: fc-ty-demo-mysql-serverless
         Logstore: mysql-log
     ty-func:
       Type: 'Aliyun::Serverless::Function'
@@ -26,7 +26,7 @@ Resources:
             AuthType: ANONYMOUS
             Methods: ['POST', 'GET', 'HEAD', 'PUT', 'DELETE']
 
-  fc-ty-demo:
+  fc-ty-demo-mysql-serverless:
     Type: 'Aliyun::Serverless::Log'
     Properties:
       Description: 'fc web log project'
@@ -36,7 +36,6 @@ Resources:
         TTL: 10
         ShardCount: 1
   fc-wordpress-domain:
-  # 这里修改成fc-typecho-domain后出问题，得研究下
     Type: 'Aliyun::Serverless::CustomDomain'
     Properties:
       DomainName: Auto

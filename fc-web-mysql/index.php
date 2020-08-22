@@ -3,11 +3,11 @@ use RingCentral\Psr7\Response;
 
 function handler($request, $context): Response
 {
-    $host = "hz.mofangdegisn.cn"; // change to your domain
+    $host = "ty.catni.cn"; // change to your domain
     $root_dir = '/mnt/auto/typecho'; // nas dir
     $uri = $request->getAttribute("requestURI");
     $uriArr = explode("?", $uri);
-    // default php / or /admin/
+    // default php / or /wp-admin/
     if (preg_match('#/$#', $uriArr[0]) && !(strpos($uri, '.php'))) {
         $uriArr[0] .= "index.php";
         $uri = implode($uriArr);
