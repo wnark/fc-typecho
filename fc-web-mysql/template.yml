@@ -35,7 +35,8 @@ Resources:
       Properties:
         TTL: 10
         ShardCount: 1
-  fc-typecho-domain:
+  fc-wordpress-domain:
+  # 这里修改成fc-typecho-domain后出问题，得研究下
     Type: 'Aliyun::Serverless::CustomDomain'
     Properties:
       DomainName: Auto
